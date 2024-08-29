@@ -3,10 +3,10 @@ const cors = require('cors')
 const jwt = require('jsonwebtoken')
 require('dotenv').config()
 const app = express()
+const cookieParser = require('cookie-parser')
 const port = process.env.port || 5000
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
-// password:   0RkVpzlnM068PtJu
 
 const corsOptions = {
     origin: ['http://localhost:5173'],
@@ -36,6 +36,22 @@ async function run() {
 
         const jobsCollection = client.db('monoSphere').collection('jobs')
         const bidsCollection = client.db('monoSphere').collection('bids')
+
+
+        // jwt generate
+        app.post('/jwt', async (req, res) => {
+            const userEmail = req.body;
+            const token = jwt.sign(userEmail, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
+            // res.send({token})
+            res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict' }).send({ success: true })
+        })
+
+        //clear token on logout
+        app.get('/logout',async(req,res)=>{
+            res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',maxAge:0 }).send({ success: true })
+        })
+
+
 
         //get all job data from db
         app.get('/jobs', async (req, res) => {
@@ -77,25 +93,58 @@ async function run() {
         app.delete('/jobs/:id', async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
-            const result= await jobsCollection.deleteOne(filter)
+            const result = await jobsCollection.deleteOne(filter)
             res.send(result);
-            
+
         })
 
         //update a job listing
-        app.put('/job/:id',async(req,res)=>{
-            const id= req.params.id;
-            const filter={_id: new ObjectId(id)}
-            const jobData=req.body
-            const options={upsert:true};
-            const updateDoc={
-                $set:{
+        app.put('/job/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const jobData = req.body
+            const options = { upsert: true };
+            const updateDoc = {
+                $set: {
                     ...jobData
                 }
             }
-            const result =await jobsCollection.updateOne(filter,updateDoc,options)
+            const result = await jobsCollection.updateOne(filter, updateDoc, options)
             res.send(result);
         })
+
+        // get all bids made by a user | by email from  db
+        app.get('/my-bids/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { email: email }
+            const result = await bidsCollection.find(query).toArray()
+            res.send(result);
+        })
+
+        //get all bid request from db for job owner
+        app.get('/bid-request/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { 'buyers.email': email }
+            const result = await bidsCollection.find(query).toArray()
+            res.send(result);
+        })
+
+
+        //update bid status
+        app.patch('/bid/:id', async (req, res) => {
+            const id = req.params.id;
+            const status = req.body;
+            const query = { _id: new ObjectId(id) }
+            const updateDoc = {
+                $set: status
+            }
+            const result = await bidsCollection.updateOne(query, updateDoc)
+            res.send(result)
+        })
+
+
+
+
 
 
 
