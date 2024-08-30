@@ -17,8 +17,29 @@ const corsOptions = {
 // middleware
 app.use(cors(corsOptions))
 app.use(express.json())
+app.use(cookieParser())
 
-console.log(process.env.DB_USER)
+
+// verify jwt middleware
+const verifyToken= async (req,res,next)=>{
+    const token= req.cookie?.token
+    if(!token){
+        return res.status(401).send({message:"unauthorized access"})
+    }
+    if(token){
+        jwt.verify(token,process.env.ACCESS_TOKEN_SECRET,(err,decoded)=>{
+            if(err){
+               console.log(err)
+               return res.status(401).send({message:"unauthorized access"})
+            }
+            console.log(decoded)
+            req.user=decoded
+            next()
+        })
+    }
+}
+
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.n2g3mj5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -42,7 +63,7 @@ async function run() {
         app.post('/jwt', async (req, res) => {
             const userEmail = req.body;
             const token = jwt.sign(userEmail, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
-            // res.send({token})
+            // console.log(token)
             res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict' }).send({ success: true })
         })
 
@@ -82,8 +103,12 @@ async function run() {
         })
 
         // get all jobs posted  by a specific user
-        app.get('/jobs/:email', async (req, res) => {
+        app.get('/jobs/:email',verifyToken, async (req, res) =>{
+            const tokenEmail = req?.user?.email
             const email = req.params.email;
+            if(tokenEmail !== email){
+                res.status(403).send({message:"forbidden access"})
+            }
             const query = { 'buyers.email': email }
             const result = await jobsCollection.find(query).toArray();
             res.send(result);
@@ -122,8 +147,12 @@ async function run() {
         })
 
         //get all bid request from db for job owner
-        app.get('/bid-request/:email', async (req, res) => {
+        app.get('/bid-request/:email',verifyToken, async (req, res) => {
+            const tokenEmail=req.user?.email
             const email = req.params.email
+            if(tokenEmail!==email){
+                res.status(403).send({message:"forbidden access"})
+            }
             const query = { 'buyers.email': email }
             const result = await bidsCollection.find(query).toArray()
             res.send(result);
