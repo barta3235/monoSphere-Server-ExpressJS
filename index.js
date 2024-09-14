@@ -21,19 +21,21 @@ app.use(cookieParser())
 
 
 // verify jwt middleware
-const verifyToken= async (req,res,next)=>{
-    const token= req.cookie?.token
-    if(!token){
-        return res.status(401).send({message:"unauthorized access"})
+const verifyToken = async (req, res, next) => {
+    console.log('in middleware')
+    const token = req.cookies?.token
+    if (!token) {
+        console.log('in middle ware gaian')
+        return res.status(401).send({ message: "unauthorized access | no token" })
     }
-    if(token){
-        jwt.verify(token,process.env.ACCESS_TOKEN_SECRET,(err,decoded)=>{
-            if(err){
-               console.log(err)
-               return res.status(401).send({message:"unauthorized access"})
+    if (token) {
+        jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+            if (err) {
+                console.log(err)
+                return res.status(401).send({ message: "unauthorized access" })
             }
-            console.log(decoded)
-            req.user=decoded
+            console.log('middleware', decoded)
+            req.user = decoded
             next()
         })
     }
@@ -68,8 +70,8 @@ async function run() {
         })
 
         //clear token on logout
-        app.get('/logout',async(req,res)=>{
-            res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',maxAge:0 }).send({ success: true })
+        app.get('/logout', async (req, res) => {
+            res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict', maxAge: 0 }).send({ success: true })
         })
 
 
@@ -93,13 +95,13 @@ async function run() {
             const bidData = req.body;
 
             //check if its a duplicate request
-            const query={
+            const query = {
                 email: bidData.email,
-                jobId:bidData.jobId
+                jobId: bidData.jobId
             }
-            const alreadyApplied=await bidsCollection.findOne(query)
-            
-            if(alreadyApplied){
+            const alreadyApplied = await bidsCollection.findOne(query)
+
+            if (alreadyApplied) {
                 return res.status(400).send('You already placed a bid on this job')
             }
 
@@ -115,11 +117,12 @@ async function run() {
         })
 
         // get all jobs posted  by a specific user
-        app.get('/jobs/:email',verifyToken, async (req, res) =>{
+        app.get('/jobs/:email', verifyToken, async (req, res) => {
+            console.log(2111)
             const tokenEmail = req?.user?.email
             const email = req.params.email;
-            if(tokenEmail !== email){
-                res.status(403).send({message:"forbidden access"})
+            if (tokenEmail !== email) {
+                res.status(403).send({ message: "forbidden access" })
             }
             const query = { 'buyers.email': email }
             const result = await jobsCollection.find(query).toArray();
@@ -151,20 +154,24 @@ async function run() {
         })
 
         // get all bids made by a user | by email from  db
-        app.get('/my-bids/:email', async (req, res) => {
+        app.get('/my-bids/:email', verifyToken, async (req, res) => {
+            const tokenEmail = req.user.email
             const email = req.params.email
+            if (tokenEmail !== email) {
+                res.status(403).send({ message: "forbidden access" })
+            }
             const query = { email: email }
             const result = await bidsCollection.find(query).toArray()
             res.send(result);
         })
 
         //get all bid request from db for job owner
-        app.get('/bid-request/:email', async (req, res) => {
-            const tokenEmail=req.user?.email
+        app.get('/bid-request/:email', verifyToken, async (req, res) => {
+            const tokenEmail = req.user?.email
             const email = req.params.email
-            // if(tokenEmail!==email){
-            //     res.status(403).send({message:"forbidden access"})
-            // }
+            if (tokenEmail !== email) {
+                res.status(403).send({ message: "forbidden access" })
+            }
             const query = { 'buyers.email': email }
             const result = await bidsCollection.find(query).toArray()
             res.send(result);
@@ -181,6 +188,29 @@ async function run() {
             }
             const result = await bidsCollection.updateOne(query, updateDoc)
             res.send(result)
+        })
+
+
+        // for pagination get all data count
+        app.get('/jobs-count', async (req, res) => {
+            const count = await jobsCollection.countDocuments()
+            res.send({ count })
+        })
+
+        //for pagination get all data, pagination, filter, search
+        app.get('/all-jobs', async (req, res) => {
+            const page = parseInt(req.query.page) -1
+            const size = parseInt(req.query.size)
+            
+            //filter
+            const filter= req.query.filter
+            let query={}
+            if(filter){
+                query={category:filter}
+            }
+            
+            const result = await jobsCollection.find(query).skip(page * size).limit(size).toArray()
+            res.send(result);
         })
 
 
