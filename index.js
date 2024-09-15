@@ -199,17 +199,24 @@ async function run() {
 
         //for pagination get all data, pagination, filter, search
         app.get('/all-jobs', async (req, res) => {
-            const page = parseInt(req.query.page) -1
+            const page = parseInt(req.query.page) - 1
             const size = parseInt(req.query.size)
-            
+            const sort = req.query.sort
+
             //filter
-            const filter= req.query.filter
-            let query={}
-            if(filter){
-                query={category:filter}
+            const filter = req.query.filter
+            let query = {}
+            if (filter) {
+                query = { category: filter }
             }
-            
-            const result = await jobsCollection.find(query).skip(page * size).limit(size).toArray()
+
+            //sort
+            let options = {}
+            if (sort) {
+                options = { sort: { deadline: sort === 'asc' ? 1 : -1 } }
+            }
+
+            const result = await jobsCollection.find(query, options).skip(page * size).limit(size).toArray()
             res.send(result);
         })
 
