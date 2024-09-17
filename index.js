@@ -193,7 +193,16 @@ async function run() {
 
         // for pagination get all data count
         app.get('/jobs-count', async (req, res) => {
-            const count = await jobsCollection.countDocuments()
+            const filter = req.query.filter
+            const search = req.query.search
+
+            let query = {
+                job_title: { $regex: search, $options: 'i' }
+            }
+
+            if(filter) query.category=filter
+
+            const count = await jobsCollection.countDocuments(query)
             res.send({ count })
         })
 
@@ -202,13 +211,19 @@ async function run() {
             const page = parseInt(req.query.page) - 1
             const size = parseInt(req.query.size)
             const sort = req.query.sort
+            const search = req.query.search
+
+            //search
+            let query = {
+                job_title: { $regex: search, $options: 'i' }
+            }
 
             //filter
             const filter = req.query.filter
-            let query = {}
             if (filter) {
-                query = { category: filter }
+                query.category = filter
             }
+
 
             //sort
             let options = {}
